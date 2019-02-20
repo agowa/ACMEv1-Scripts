@@ -26,9 +26,23 @@ try {
 } catch [System.IO.FileNotFoundException] {
     Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force;
     Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted;
-    Install-Module -Name ACMESharp -Scope CurrentUser;
+    Install-Module -Name ACMESharp -Scope AllUsers;
     Set-PSRepository -Name "PSGallery" -InstallationPolicy Untrusted;
     Import-Module ACMESharp -ErrorAction Stop;
+};
+try {
+    Import-Module ACMESharp.Providers.IIS -ErrorAction Stop;
+} catch [System.IO.FileNotFoundException] {
+    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force;
+    Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted;
+    Install-Module -Name ACMESharp.Providers.IIS -Scope AllUsers;
+    Set-PSRepository -Name "PSGallery" -InstallationPolicy Untrusted;
+    Import-Module ACMESharp.Providers.IIS -ErrorAction Stop;
+    Enable-ACMEExtensionModule -ModuleName ACMESharp.Providers.IIS;
+    Remove-Module ACMESharp.Providers.IIS -ErrorAction Stop;
+    Remove-Module ACMESharp -ErrorAction Stop;
+    Import-Module ACMESharp -ErrorAction Stop;
+    Import-Module ACMESharp.Providers.IIS -ErrorAction Stop;
 };
 Import-Module WebAdministration;
 $MyACMEVault = Get-ACMEVault;
@@ -130,9 +144,14 @@ Get-ACMECertificate $CertAlias -ExportPkcs12 $PfxFilePath;
 # Get-ACMECertificate $CertAlias -ExportCertificatePEM $PemCertificateFilePath -ExportCertificateDER $SANDerCertificateFilePath
 # Get-ACMECertificate $CertAlias -ExportIssuerPEM $LetsEncryptCAPEMCertificateFilePath -ExportIssuerDer $LetsEncryptCADerCertificateFilePath
 
-$exchver =  Get-Command exsetup | ForEach-Object {
-    $_.fileversioninfo.ProductVersion.Split("{.}");
+try {
+    $exchver =  Get-Command exsetup -ErrorAction Stop | ForEach-Object {
+        $_.fileversioninfo.ProductVersion.Split("{.}");
+    };
+} catch {
+    $exchver = @($null);
 };
+
 switch ($exchver[0]) { 
     8 {
         Add-PSSnapin Microsoft.Exchange.Management.PowerShell.Admin;
@@ -176,10 +195,8 @@ switch ($exchver[0]) {
 };
 
 Write-Debug "Cleaning up...";
-Remove-Item $AuthPath -Force -Recurse;
-Remove-Item $PfxFilePath -Force;
-Remove-Item "$env:ALLUSERSPROFILE\ACMESharp\sysVault" -Force -Recurse -Exclude "00-VAULT",".acme.vault";
-Remove-Item "$env:LOCALAPPDATA\ACMESharp\userVault" -Force -Recurse -Exclude "00-VAULT",".acme.vault";
+Remove-Item $AuthPath -Force -Recurse -ErrorAction SilentlyContinue;
+Remove-Item $PfxFilePath -Force -ErrorAction SilentlyContinue;
 
 Set-Location $invokeLocation;
 
