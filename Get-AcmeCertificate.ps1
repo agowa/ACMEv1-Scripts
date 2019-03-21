@@ -54,9 +54,12 @@ function Register-FQDN {
     Write-Debug "New-ACMEIdentifier";
     New-ACMEIdentifier -Dns $FQDN -Alias $FQDN | select status, Expires;
     Write-Debug "Complete-ACMEChallenge";
-    Complete-ACMEChallenge $FQDN -ChallengeType http-01 -Handler iis -HandlerParameters @{ WebSiteRef = 'Default Web Site' } | select Identifier, status, Expires;
-    Write-Debug "Submit-ACMEChallenge";
-    Submit-ACMEChallenge $FQDN -ChallengeType http-01 | select Identifier, status, Expires;
+    $request = Complete-ACMEChallenge $FQDN -ChallengeType http-01 -Handler iis -HandlerParameters @{ WebSiteRef = 'Default Web Site' }
+    $request | select Identifier, status, Expires | Write-Host;
+    if ($request.Status -ne "valid") {
+      Write-Debug "Submit-ACMEChallenge";
+      Submit-ACMEChallenge $FQDN -ChallengeType http-01 | select Identifier, status, Expires;
+    }
 
     while ($Auth -ne "valid") {
         $Auth = ((Update-ACMEIdentifier $FQDN -ChallengeType http-01).Challenges | Where-Object {$_.Type -eq "http-01"}).status;
