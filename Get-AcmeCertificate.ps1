@@ -49,9 +49,9 @@ $MyACMEVault = Get-ACMEVault;
 
 function Register-FQDN {
     param(
-        [String]$FQDN
+        [String]$FQDN,
+        [String]$Alias
     );
-    $Alias = '{0}_{1}' -f $FQDN, [guid]::NewGuid)_.Guid
     Write-Debug "New-ACMEIdentifier";
     New-ACMEIdentifier -Dns $FQDN -Alias $Alias | select status, Expires;
     Write-Debug "Complete-ACMEChallenge";
@@ -59,9 +59,11 @@ function Register-FQDN {
     $request | select Identifier, status, Expires | Write-Host;
     if ($request.Status -ne "valid") {
       Write-Debug "Submit-ACMEChallenge";
+      # Break here, to check if the challenge can be reached publicly, the following command tells LE to validate it.
       Submit-ACMEChallenge $Alias -ChallengeType http-01 | select Identifier, status, Expires;
     }
 
+    $Auth = 'placeholder'
     while ($Auth -ne "valid") {
         $Auth = ((Update-ACMEIdentifier $FQDN -ChallengeType http-01).Challenges | Where-Object {$_.Type -eq "http-01"}).status;
         if($Auth -eq "invalid") {
@@ -92,36 +94,24 @@ if (-Not (Test-Path $AuthPath)) {
     c:\windows\system32\inetsrv\appcmd.exe set config "Default Web Site/.well-known" -section:system.webServer/security/access /sslFlags:"None" /commit:apphost;
 };
 
-#uncoment the lines bellow, after testing is done, to really request a certificate.
-# Write-Debug "Register-FQDN $CN";
-# Register-FQDN $CN;
-# Write-Debug "Register-FQDN $SAN1";
-# Register-FQDN $SAN1;
-# Write-Debug "Register-FQDN $SAN2";
-# Register-FQDN $SAN2;
-# Write-Debug "Register-FQDN $SAN3";
-# Register-FQDN $SAN3;
-# Write-Debug "Register-FQDN $SAN4";
-# Register-FQDN $SAN4;
-# Write-Debug "New-ACMECertificate";
-# New-ACMECertificate $CN -Generate -AlternativeIdentifierRefs $SAN1,$SAN2,$SAN3,$SAN4 -Alias $CertAlias;
-
 # Prepear IIS For Register-FQDN
 $isOverrideDenied = (Get-WebConfiguration //System.webserver/handlers -PSPath IIS:\ -Recurse -Metadata -Location "Default Web Site").OverrideMode -eq 'Deny'
 if ($isOverrideDenied) {
     Set-WebConfiguration //System.webserver/handlers -Metadata overrideMode -Value Allow -PSPath 'IIS:\' -Location 'Default Web Site';
 };
 
+$RequestAlias = '{0}_{1}' -f $CN, [guid]::NewGuid)_.Guid
 if ($SANs.Length -gt 0) {
     $SANs | ForEach-Object {
+        $SANRequestAlias = '{0}_{1}' -f $_, $RequestAlias
         Write-Debug "Register-FQDN $_";
-        Register-FQDN $_;
+        Register-FQDN -FQDN $_ -Alias $SANRequestAlias;
     };
-    Register-FQDN $CN;
-    New-ACMECertificate $CN -Generate -AlternativeIdentifierRefs $SANs -Alias $CertAlias;
+    Register-FQDN -FQDN $CN -Alias $RequestAlias;
+    New-ACMECertificate $RequestAlias -Generate -AlternativeIdentifierRefs $SANs -Alias $CertAlias;
 } else {
-    Register-FQDN $CN;
-    New-ACMECertificate $CN -Generate -Alias $CertAlias;
+    Register-FQDN -FQDN $CN -Alias $RequestAlias;
+    New-ACMECertificate $RequestAlias -Generate -Alias $CertAlias;
 };
 
 # Undo Prepear IIS for Register-FQDN
@@ -190,7 +180,7 @@ switch ($exchver[0]) {
         get-item cert:\LocalMachine\MY\$CertThumb | set-item -Path $((Get-ChildItem -Path . | Select-Object IPAddress,Port | ConvertTo-Csv -Delimiter "!" -NoTypeInformation | Select-Object -Skip 1) -replace "`"");
         iisreset;
         
-        $isRGW = (Get-WindowsFeature -Name Remote-Desktop-Services).Installed;
+        $isRGW = (Get-WindowsFeature -Name RDS-Gateway).Installed;
         if($isRGW) {
             Import-Module RemoteDesktopServices;
             Set-Item -Path "RDS:\GatewayServer\SSLCertificate\Thumbprint" $CertThumb;
