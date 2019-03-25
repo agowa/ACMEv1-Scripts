@@ -51,14 +51,15 @@ function Register-FQDN {
     param(
         [String]$FQDN
     );
+    $Alias = '{0}_{1}' -f $FQDN, [guid]::NewGuid)_.Guid
     Write-Debug "New-ACMEIdentifier";
-    New-ACMEIdentifier -Dns $FQDN -Alias $FQDN | select status, Expires;
+    New-ACMEIdentifier -Dns $FQDN -Alias $Alias | select status, Expires;
     Write-Debug "Complete-ACMEChallenge";
-    $request = Complete-ACMEChallenge $FQDN -ChallengeType http-01 -Handler iis -HandlerParameters @{ WebSiteRef = 'Default Web Site' }
+    $request = Complete-ACMEChallenge $Alias -ChallengeType http-01 -Handler iis -HandlerParameters @{ WebSiteRef = 'Default Web Site' } -Force
     $request | select Identifier, status, Expires | Write-Host;
     if ($request.Status -ne "valid") {
       Write-Debug "Submit-ACMEChallenge";
-      Submit-ACMEChallenge $FQDN -ChallengeType http-01 | select Identifier, status, Expires;
+      Submit-ACMEChallenge $Alias -ChallengeType http-01 | select Identifier, status, Expires;
     }
 
     while ($Auth -ne "valid") {
@@ -71,7 +72,7 @@ function Register-FQDN {
         Start-Sleep -s 3;
     };
     Write-Debug "Update-ACMEIdentifier";
-    Update-ACMEIdentifier $FQDN | select Identifier, status, Expires;
+    Update-ACMEIdentifier $Alias | select Identifier, status, Expires;
 };
 
 if (-Not $MyACMEVault) {
