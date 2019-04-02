@@ -95,8 +95,8 @@ if (-Not (Test-Path $AuthPath)) {
 };
 
 # Prepear IIS For Register-FQDN
-$isOverrideDenied = (Get-WebConfiguration //System.webserver/handlers -PSPath IIS:\ -Recurse -Metadata -Location "Default Web Site").OverrideMode -eq 'Deny'
-if ($isOverrideDenied) {
+$isOverrideDenied = (Get-WebConfiguration //System.webserver/handlers -PSPath IIS:\ -Metadata -Location "Default Web Site").OverrideMode.ToString()
+if ($isOverrideDenied -ne 'Allow') {
     Set-WebConfiguration //System.webserver/handlers -Metadata overrideMode -Value Allow -PSPath 'IIS:\' -Location 'Default Web Site';
 };
 
@@ -115,8 +115,8 @@ if ($SANs.Length -gt 0) {
 };
 
 # Undo Prepear IIS for Register-FQDN
-if ($isOverrideDenied) {
-    Set-WebConfiguration //System.webserver/handlers -Metadata overrideMode -Value Deny -PSPath 'IIS:\' -Location 'Default Web Site';
+if ($isOverrideDenied -ne 'Allow') {
+    Set-WebConfiguration //System.webserver/handlers -Metadata overrideMode -Value $isOverrideDenied -PSPath 'IIS:\' -Location 'Default Web Site';
 };
 
 Write-Debug "Submit-ACMECertificate";
