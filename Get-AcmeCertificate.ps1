@@ -14,6 +14,7 @@ $SANs = @(
     "autodiscover.contoso.com",
     "mx01.contoso.com"
 );
+#$RemoteDesktopConnectionBrokerComputerName = "RDCB"
 $CertPath = "c:\Certificates";
 $AuthPath = "C:\inetpub\wwwroot\.well-known";
 $CertAlias = "$($CN)_$($(get-date -format yyyy-MM-dd-HH-mm))";
@@ -77,6 +78,49 @@ function Register-FQDN {
     Update-ACMEIdentifier $Alias | select Identifier, status, Expires;
 };
 
+function Update-RemoteDesktopServicesCertificate {
+    param(
+      [Parameter(Mandatory)][string]$RDCBComputerName
+      [Parameter(Mandatory)][string]$CertThumb
+    );
+    if (-not [bool](Import-Module RemoteDesktop -ErrorAction SilentlyContinue)) {
+        return;
+    };
+    $tmpPfxPath = Join-Path -Path $env:TEMP -ChildPath tmp.pfx;
+    $tmpPw = ConvertTo-SecureString -String "TempPW_Ahjie7woosohghaepeim" -Force -AsPlainText;
+    Export-PfxCertificate -cert $CertThumb -FilePath $tmpPfxPath -Force -NoProperties -Password $tmpPw;
+    
+    $collection = @{}; Get-RDServer -ConnectionBroker $RDCBComputerName | ForEach-Object { $collection.Add($_.Server,$_.Roles) };
+    $currentHostName = [Microsoft.RemoteDesktopServices.Common.CommonUtility]::GetLocalhostFullyQualifiedDomainname();
+    
+    $rdsh = [Microsoft.RemoteDesktopServices.Common.RDMSConstants]::RoleServiceRemoteDesktopSessionHost;
+    $rdvh = [Microsoft.RemoteDesktopServices.Common.RDMSConstants]::RoleServiceRemoteDesktopVirtualizationHost;
+    $rdcb = [Microsoft.RemoteDesktopServices.Common.RDMSConstants]::RoleServiceRemoteDesktopConnectionBroker;
+    $rdwa = [Microsoft.RemoteDesktopServices.Common.RDMSConstants]::RoleServiceRemoteDesktopWebAccess;
+    $rdgw = [Microsoft.RemoteDesktopServices.Common.RDMSConstants]::RoleServiceRemoteDesktopGateway;
+    $rdls = [Microsoft.RemoteDesktopServices.Common.RDMSConstants]::RoleServiceRemoteDesktopLicensing;
+    
+    foreach($role in $collection[$currentHostName]) {
+        switch($role) {
+            $rdcb {
+                Set-RDCertificate -Role RDPublishing -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker $RDCBComputerName -Force;
+                Set-RDCertificate -Role RDRedirector -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker $RDCBComputerName -Force;
+                (Get-CimInstance -class "Win32_TSGeneralSetting" -Namespace root\cimv2\terminalservices -Filter "TerminalName='RDP-tcp'").SSLCertificateSHA1Hash = $CertThumb;
+            };
+            $rdwa {
+                Set-RDCertificate -Role RDWebAccess -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker $RDCBComputerName -Force;
+            };
+            $rdgw {
+                Set-RDCertificate -Role RDGateway -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker $RDCBComputerName -Force;
+            };
+            $rdls {};
+            $rdsh {};
+            $rdvh {};
+        };
+    };
+    Remove-Item -Path $tmpPfxPath;
+};
+
 if (-Not $MyACMEVault) {
     Write-Debug "Initialize-ACMEVault";
     Initialize-ACMEVault;
@@ -100,7 +144,7 @@ if ($isOverrideDenied -ne 'Allow') {
     Set-WebConfiguration //System.webserver/handlers -Metadata overrideMode -Value Allow -PSPath 'IIS:\' -Location 'Default Web Site';
 };
 
-$RequestAlias = '{0}_{1}' -f $CN, [guid]::NewGuid)_.Guid
+$RequestAlias = '{0}_{1}' -f $CN, ([guid]::NewGuid)_.Guid
 if ($SANs.Length -gt 0) {
     $SANs | ForEach-Object {
         $SANRequestAlias = '{0}_{1}' -f $_, $RequestAlias
@@ -180,11 +224,7 @@ switch ($exchver[0]) {
         get-item cert:\LocalMachine\MY\$CertThumb | set-item -Path $((Get-ChildItem -Path . | Select-Object IPAddress,Port | ConvertTo-Csv -Delimiter "!" -NoTypeInformation | Select-Object -Skip 1) -replace "`"");
         iisreset;
         
-        $isRGW = (Get-WindowsFeature -Name RDS-Gateway).Installed;
-        if($isRGW) {
-            Import-Module RemoteDesktopServices;
-            Set-Item -Path "RDS:\GatewayServer\SSLCertificate\Thumbprint" $CertThumb;
-        };
+        Update-RemoteDesktopServicesCertificate -RDCBComputerName $RemoteDesktopConnectionBrokerComputerName -CertThumb $CertThumb;
     };
 };
 
