@@ -66,7 +66,7 @@ function Register-FQDN {
 
     $Auth = 'placeholder'
     while ($Auth -ne "valid") {
-        $Auth = ((Update-ACMEIdentifier $FQDN -ChallengeType http-01).Challenges | Where-Object {$_.Type -eq "http-01"}).status;
+        $Auth = ((Update-ACMEIdentifier $Alias -ChallengeType http-01).Challenges | Where-Object {$_.Type -eq "http-01"}).status;
         if($Auth -eq "invalid") {
             Write-Error "ACME Verifidation failed" -Category AuthenticationError;
             break;
@@ -80,7 +80,7 @@ function Register-FQDN {
 
 function Update-RemoteDesktopServicesCertificate {
     param(
-      [Parameter(Mandatory)][string]$RDCBComputerName,
+      [string]$RDCBComputerName,
       [Parameter(Mandatory)][string]$CertThumb
     );
     if (-not [bool](Import-Module RemoteDesktop -ErrorAction SilentlyContinue)) {
@@ -90,7 +90,7 @@ function Update-RemoteDesktopServicesCertificate {
     $tmpPw = ConvertTo-SecureString -String "TempPW_Ahjie7woosohghaepeim" -Force -AsPlainText;
     Export-PfxCertificate -cert $CertThumb -FilePath $tmpPfxPath -Force -NoProperties -Password $tmpPw;
     
-    $collection = @{}; Get-RDServer -ConnectionBroker $RDCBComputerName | ForEach-Object { $collection.Add($_.Server,$_.Roles) };
+    $collection = @{}; Get-RDServer -ConnectionBroker:$RDCBComputerName | ForEach-Object { $collection.Add($_.Server,$_.Roles) };
     $currentHostName = [Microsoft.RemoteDesktopServices.Common.CommonUtility]::GetLocalhostFullyQualifiedDomainname();
     
     $rdsh = [Microsoft.RemoteDesktopServices.Common.RDMSConstants]::RoleServiceRemoteDesktopSessionHost;
@@ -103,15 +103,15 @@ function Update-RemoteDesktopServicesCertificate {
     foreach($role in $collection[$currentHostName]) {
         switch($role) {
             $rdcb {
-                Set-RDCertificate -Role RDPublishing -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker $RDCBComputerName -Force;
-                Set-RDCertificate -Role RDRedirector -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker $RDCBComputerName -Force;
+                Set-RDCertificate -Role RDPublishing -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker:$RDCBComputerName -Force;
+                Set-RDCertificate -Role RDRedirector -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker:$RDCBComputerName -Force;
                 (Get-CimInstance -class "Win32_TSGeneralSetting" -Namespace root\cimv2\terminalservices -Filter "TerminalName='RDP-tcp'").SSLCertificateSHA1Hash = $CertThumb;
             };
             $rdwa {
-                Set-RDCertificate -Role RDWebAccess -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker $RDCBComputerName -Force;
+                Set-RDCertificate -Role RDWebAccess -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker:$RDCBComputerName -Force;
             };
             $rdgw {
-                Set-RDCertificate -Role RDGateway -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker $RDCBComputerName -Force;
+                Set-RDCertificate -Role RDGateway -ImportPath $tmpPfxPath -Password $tmpPw -ConnectionBroker:$RDCBComputerName -Force;
             };
             $rdls {};
             $rdsh {};
@@ -224,7 +224,7 @@ switch ($exchver[0]) {
         get-item cert:\LocalMachine\MY\$CertThumb | set-item -Path $((Get-ChildItem -Path . | Select-Object IPAddress,Port | ConvertTo-Csv -Delimiter "!" -NoTypeInformation | Select-Object -Skip 1) -replace "`"");
         iisreset;
         
-        Update-RemoteDesktopServicesCertificate -RDCBComputerName $RemoteDesktopConnectionBrokerComputerName -CertThumb $CertThumb;
+        Update-RemoteDesktopServicesCertificate -RDCBComputerName:$RemoteDesktopConnectionBrokerComputerName -CertThumb $CertThumb;
     };
 };
 
