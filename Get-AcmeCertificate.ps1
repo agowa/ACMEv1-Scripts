@@ -80,7 +80,7 @@ function Register-FQDN {
 
 function Update-RemoteDesktopServicesCertificate {
     param(
-      [Parameter(Mandatory)][string]$RDCBComputerName
+      [Parameter(Mandatory)][string]$RDCBComputerName,
       [Parameter(Mandatory)][string]$CertThumb
     );
     if (-not [bool](Import-Module RemoteDesktop -ErrorAction SilentlyContinue)) {
@@ -144,7 +144,7 @@ if ($isOverrideDenied -ne 'Allow') {
     Set-WebConfiguration //System.webserver/handlers -Metadata overrideMode -Value Allow -PSPath 'IIS:\' -Location 'Default Web Site';
 };
 
-$RequestAlias = '{0}_{1}' -f $CN, ([guid]::NewGuid)_.Guid
+$RequestAlias = '{0}_{1}' -f $CN, ([guid]::NewGuid()).Guid
 if ($SANs.Length -gt 0) {
     $SANs | ForEach-Object {
         $SANRequestAlias = '{0}_{1}' -f $_, $RequestAlias
