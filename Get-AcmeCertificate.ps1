@@ -88,7 +88,7 @@ function Update-RemoteDesktopServicesCertificate {
     };
     $tmpPfxPath = Join-Path -Path $env:TEMP -ChildPath tmp.pfx;
     $tmpPw = ConvertTo-SecureString -String "TempPW_Ahjie7woosohghaepeim" -Force -AsPlainText;
-    Export-PfxCertificate -cert $CertThumb -FilePath $tmpPfxPath -Force -NoProperties -Password $tmpPw;
+    Export-PfxCertificate -cert "Cert:\LocalMachine\My\$CertThumb" -FilePath $tmpPfxPath -Force -NoProperties -Password $tmpPw;
     
     $collection = @{}; Get-RDServer -ConnectionBroker:$RDCBComputerName | ForEach-Object { $collection.Add($_.Server,$_.Roles) };
     $currentHostName = [Microsoft.RemoteDesktopServices.Common.CommonUtility]::GetLocalhostFullyQualifiedDomainname();
