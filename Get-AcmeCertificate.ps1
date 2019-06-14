@@ -145,14 +145,16 @@ if ($isOverrideDenied -ne 'Allow') {
 };
 
 $RequestAlias = '{0}_{1}' -f $CN, ([guid]::NewGuid()).Guid
+$SANRequestAliases = @()
 if ($SANs.Length -gt 0) {
     $SANs | ForEach-Object {
         $SANRequestAlias = '{0}_{1}' -f $_, $RequestAlias
+        $SANRequestAliases += $SANRequestAlias
         Write-Debug "Register-FQDN $_";
         Register-FQDN -FQDN $_ -Alias $SANRequestAlias;
     };
     Register-FQDN -FQDN $CN -Alias $RequestAlias;
-    New-ACMECertificate $RequestAlias -Generate -AlternativeIdentifierRefs $SANs -Alias $CertAlias;
+    New-ACMECertificate $RequestAlias -Generate -AlternativeIdentifierRefs $SANRequestAliases -Alias $CertAlias;
 } else {
     Register-FQDN -FQDN $CN -Alias $RequestAlias;
     New-ACMECertificate $RequestAlias -Generate -Alias $CertAlias;
