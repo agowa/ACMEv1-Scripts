@@ -184,6 +184,11 @@ Get-ACMECertificate $CertAlias -ExportPkcs12 $PfxFilePath;
 # Get-ACMECertificate $CertAlias -ExportCertificatePEM $PemCertificateFilePath -ExportCertificateDER $SANDerCertificateFilePath
 # Get-ACMECertificate $CertAlias -ExportIssuerPEM $LetsEncryptCAPEMCertificateFilePath -ExportIssuerDer $LetsEncryptCADerCertificateFilePath
 
+
+# Import Certificate here, as even for exchange it is required to do this import up front, or it cannot be assigned for IIS
+# so we need to do this in all cases anyway. It is also a good way to retrieve the Thumbprint.
+$CertThumb = (Import-PfxCertificate -FilePath $PfxFilePath -CertStoreLocation Cert:\LocalMachine\My -Exportable).Thumbprint;
+
 try {
     $exchver =  Get-Command exsetup -ErrorAction Stop | ForEach-Object {
         $_.fileversioninfo.ProductVersion.Split("{.}");
@@ -192,6 +197,7 @@ try {
     $exchver = @($null);
 };
 
+# Import Certificate for Exchange and IIS (Importing a certificate to iis is different if exchange is installed)
 switch ($exchver[0]) { 
     8 {
         Add-PSSnapin Microsoft.Exchange.Management.PowerShell.Admin;
@@ -222,13 +228,15 @@ switch ($exchver[0]) {
         Write-Debug "Skip Exchange processing;";
         # Implement IIS only handling here
         Set-Location IIS:\SslBindings;
-        $CertThumb = (Import-PfxCertificate -FilePath $PfxFilePath -CertStoreLocation Cert:\LocalMachine\My -Exportable).Thumbprint;
         get-item cert:\LocalMachine\MY\$CertThumb | set-item -Path $((Get-ChildItem -Path . | Select-Object IPAddress,Port | ConvertTo-Csv -Delimiter "!" -NoTypeInformation | Select-Object -Skip 1) -replace "`"");
         iisreset;
-        
-        Update-RemoteDesktopServicesCertificate -RDCBComputerName:$RemoteDesktopConnectionBrokerComputerName -CertThumb $CertThumb;
     };
 };
+
+# Import certificate for Remote Desktop
+Update-RemoteDesktopServicesCertificate -RDCBComputerName:$RemoteDesktopConnectionBrokerComputerName -CertThumb $CertThumb;
+
+
 
 Write-Debug "Cleaning up...";
 Remove-Item $AuthPath -Force -Recurse -ErrorAction SilentlyContinue;
