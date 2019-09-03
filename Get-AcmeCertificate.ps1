@@ -83,9 +83,9 @@ function Update-RemoteDesktopServicesCertificate {
       [string]$RDCBComputerName,
       [Parameter(Mandatory)][string]$CertThumb
     );
-    if (-not [bool](Import-Module RemoteDesktop -ErrorAction SilentlyContinue)) {
-        return;
-    };
+#    if (-not [bool](Import-Module RemoteDesktop -ErrorAction SilentlyContinue)) {
+#        return;
+#    };
     $tmpPfxPath = Join-Path -Path $env:TEMP -ChildPath tmp.pfx;
     $tmpPw = ConvertTo-SecureString -String "TempPW_Ahjie7woosohghaepeim" -Force -AsPlainText;
     Export-PfxCertificate -cert "Cert:\LocalMachine\My\$CertThumb" -FilePath $tmpPfxPath -Force -NoProperties -Password $tmpPw;
